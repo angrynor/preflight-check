@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPremiumIndex } from "@/lib/binance";
+import { getPremiumIndexBybit } from "@/lib/bybit";
 import { getFallbackPrice } from "@/lib/coingecko";
 import { isSupportedCoin } from "@/lib/coins";
 
@@ -16,24 +17,32 @@ export async function GET(req: NextRequest): Promise<Response> {
   if (!isSupportedCoin(coin)) {
     return NextResponse.json({ error: "Unsupported coin." }, { status: 400 });
   }
+
   try {
     const premium = await getPremiumIndex(coin);
     return NextResponse.json({ markPrice: premium.markPrice, source: "binance" });
   } catch (err) {
     console.warn(
-      `[mark-price] binance failed for ${coin}, trying coingecko: ${err instanceof Error ? err.message : err}`
+      `[mark-price] binance failed for ${coin}: ${err instanceof Error ? err.message : err}`
     );
-    try {
-      const price = await getFallbackPrice(coin);
-      return NextResponse.json({ markPrice: price, source: "coingecko" });
-    } catch (err2) {
-      console.error(
-        `[mark-price] both feeds failed for ${coin}: ${err2 instanceof Error ? err2.message : err2}`
-      );
-      return NextResponse.json(
-        { error: "Live mark price unavailable." },
-        { status: 503 }
-      );
-    }
+  }
+
+  try {
+    const ticker = await getPremiumIndexBybit(coin);
+    return NextResponse.json({ markPrice: ticker.markPrice, source: "bybit" });
+  } catch (err) {
+    console.warn(
+      `[mark-price] bybit failed for ${coin}: ${err instanceof Error ? err.message : err}`
+    );
+  }
+
+  try {
+    const price = await getFallbackPrice(coin);
+    return NextResponse.json({ markPrice: price, source: "coingecko" });
+  } catch (err) {
+    console.error(
+      `[mark-price] all feeds failed for ${coin}: ${err instanceof Error ? err.message : err}`
+    );
+    return NextResponse.json({ error: "Live mark price unavailable." }, { status: 503 });
   }
 }

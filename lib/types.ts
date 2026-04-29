@@ -48,7 +48,7 @@ export interface MarketSnapshot {
   klines: DailyKline[];
   priceSummary: string;
   btcDominance: number | null;
-  source: "binance" | "coingecko-fallback";
+  source: "binance" | "bybit" | "coingecko-fallback";
   warnings: string[];
 }
 
