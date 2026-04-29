@@ -3,6 +3,7 @@ import { getPremiumIndex } from "@/lib/binance";
 import { getPremiumIndexBybit } from "@/lib/bybit";
 import { getFallbackPrice } from "@/lib/coingecko";
 import { isSupportedCoin } from "@/lib/coins";
+import { getPremiumIndexOkx } from "@/lib/okx";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,6 +34,15 @@ export async function GET(req: NextRequest): Promise<Response> {
   } catch (err) {
     console.warn(
       `[mark-price] bybit failed for ${coin}: ${err instanceof Error ? err.message : err}`
+    );
+  }
+
+  try {
+    const ticker = await getPremiumIndexOkx(coin);
+    return NextResponse.json({ markPrice: ticker.markPrice, source: "okx" });
+  } catch (err) {
+    console.warn(
+      `[mark-price] okx failed for ${coin}: ${err instanceof Error ? err.message : err}`
     );
   }
 

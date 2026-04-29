@@ -12,6 +12,12 @@ import {
   getOpenInterestHistoryBybit,
   getPremiumIndexBybit
 } from "./bybit";
+import {
+  getDailyKlinesOkx,
+  getOpenInterestHistoryOkx,
+  getOpenInterestOkx,
+  getPremiumIndexOkx
+} from "./okx";
 import { getFallbackPrice, getGlobalMarket } from "./coingecko";
 import { type CoinSymbol } from "./coins";
 import { HttpError } from "./http";
@@ -34,7 +40,13 @@ export async function buildMarketSnapshot(coin: CoinSymbol): Promise<MarketSnaps
     return finalizeSnapshot(bybitResult.snapshot, "bybit", warnings);
   }
 
-  warnings.push(`bybit suite also unavailable (${bybitResult.reason})`);
+  warnings.push(`bybit suite unavailable (${bybitResult.reason}) — switching to okx`);
+  const okxResult = await tryOkxSnapshot(coin, warnings);
+  if (okxResult.ok) {
+    return finalizeSnapshot(okxResult.snapshot, "okx", warnings);
+  }
+
+  warnings.push(`okx suite also unavailable (${okxResult.reason})`);
 
   // Last-resort: just CoinGecko price + global. No funding/OI.
   try {
@@ -185,6 +197,58 @@ async function tryBybitSnapshot(coin: CoinSymbol, warnings: string[]): Promise<S
     snapshot: {
       markPrice: tickerRes.value.markPrice,
       fundingRatePct: tickerRes.value.lastFundingRate * 100,
+      openInterest,
+      openInterest7dChangePct: oi7dChangePct,
+      klines,
+      priceSummary: klines.length > 0 ? summarizeKlines(klines) : "no recent kline data",
+      btcDominance
+    }
+  };
+}
+
+async function tryOkxSnapshot(coin: CoinSymbol, warnings: string[]): Promise<SnapshotAttempt> {
+  const [premiumRes, oiSnapRes, oiHistRes, klinesRes, globalRes] = await Promise.allSettled([
+    getPremiumIndexOkx(coin),
+    getOpenInterestOkx(coin),
+    getOpenInterestHistoryOkx(coin),
+    getDailyKlinesOkx(coin, 14),
+    getGlobalMarket()
+  ]);
+
+  if (premiumRes.status === "rejected") {
+    return { ok: false, reason: `okx ticker/funding failed: ${describeError(premiumRes.reason)}` };
+  }
+
+  let openInterest = 0;
+  if (oiSnapRes.status === "fulfilled") {
+    openInterest = oiSnapRes.value.openInterest;
+  } else {
+    warnings.push(`okx openInterest failed: ${describeError(oiSnapRes.reason)}`);
+  }
+
+  let oi7dChangePct: number | null = null;
+  if (oiHistRes.status === "fulfilled") {
+    oi7dChangePct = compute7dOiChangePct(oiHistRes.value);
+  } else {
+    warnings.push(`okx openInterestHist failed: ${describeError(oiHistRes.reason)}`);
+  }
+
+  const klines = klinesRes.status === "fulfilled" ? klinesRes.value : [];
+  if (klinesRes.status === "rejected") {
+    warnings.push(`okx klines failed: ${describeError(klinesRes.reason)}`);
+  }
+
+  const btcDominance =
+    globalRes.status === "fulfilled" ? globalRes.value.btcDominance : null;
+  if (globalRes.status === "rejected") {
+    warnings.push(`coingecko global failed: ${describeError(globalRes.reason)}`);
+  }
+
+  return {
+    ok: true,
+    snapshot: {
+      markPrice: premiumRes.value.markPrice,
+      fundingRatePct: premiumRes.value.lastFundingRate * 100,
       openInterest,
       openInterest7dChangePct: oi7dChangePct,
       klines,
