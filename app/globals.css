@@ -1,0 +1,147 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: #0a0a0b;
+  color: #f5f5f5;
+}
+
+::selection {
+  background: rgba(0, 224, 255, 0.35);
+  color: #f5f5f5;
+}
+
+@layer base {
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+}
+
+@layer components {
+  .field-input {
+    @apply w-full rounded-md border border-white/10 bg-bg px-3 py-2 text-primary placeholder:text-muted/60
+      font-mono text-sm
+      focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent
+      transition-colors;
+  }
+  .field-label {
+    @apply mb-1.5 block text-xs uppercase tracking-wider text-muted font-medium;
+  }
+  .panel {
+    @apply rounded-xl border border-white/5 bg-surface p-5 sm:p-6;
+  }
+}
+
+.report-prose {
+  font-size: 0.95rem;
+  line-height: 1.65;
+}
+
+.report-prose h1,
+.report-prose h2,
+.report-prose h3 {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin-top: 1.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.report-prose h2 {
+  font-size: 1.05rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 1.25rem;
+}
+
+.report-prose h2:first-child {
+  border-top: none;
+  padding-top: 0;
+  margin-top: 0;
+}
+
+.report-prose p {
+  margin: 0.6rem 0;
+}
+
+.report-prose ul,
+.report-prose ol {
+  padding-left: 1.25rem;
+  margin: 0.5rem 0;
+}
+
+.report-prose li {
+  margin: 0.25rem 0;
+}
+
+.report-prose strong {
+  color: #f5f5f5;
+}
+
+.report-prose code {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 0.05em 0.35em;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+.section-bull h2 {
+  color: #10b981;
+}
+.section-bear h2,
+.section-warn h2 {
+  color: #ef4444;
+}
+.section-exit h2 {
+  color: #f59e0b;
+}
+.section-size h2 {
+  color: #00e0ff;
+}
+
+.shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    rgba(0, 224, 255, 0.08) 50%,
+    transparent 70%
+  );
+  transform: translateX(-100%);
+  animation: shimmer 1.6s infinite;
+}
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.cursor-blink::after {
+  content: "▍";
+  margin-left: 2px;
+  animation: blink 1s steps(2) infinite;
+  color: #00e0ff;
+}
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
