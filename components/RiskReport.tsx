@@ -12,7 +12,7 @@ interface Props {
 interface Section {
   heading: string;
   body: string;
-  variant: "bull" | "bear" | "warn" | "size" | "exit" | "neutral";
+  variant: "bull" | "bear" | "warn" | "size" | "exit" | "plan" | "neutral";
 }
 
 export function RiskReport({ text, streaming, error }: Props) {
@@ -91,6 +91,7 @@ function variantFromHeading(h: string): Section["variant"] {
   if (upper.includes("BEAR")) return "bear";
   if (upper.includes("WARNING") || upper.includes("FLAG")) return "warn";
   if (upper.includes("EXIT") || upper.includes("TRIGGER")) return "exit";
+  if (upper.includes("PLAN")) return "plan";
   if (upper.includes("SIZ")) return "size";
   return "neutral";
 }

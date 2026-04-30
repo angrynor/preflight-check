@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
 import {
-  expectAllFiveSectionsInOrder,
+  expectAllSectionsInOrder,
   fillCommonFields,
   generateCandlestickChart,
   getEntryPrice,
   setStopRelative,
-  waitForFiveSections
+  waitForAllSections
 } from "./helpers";
 
 test.describe.configure({ mode: "serial" });
@@ -36,8 +36,8 @@ test("Test 1: BTC long 10x with 2% stop, $10k account", async ({ page }) => {
 
   await page.getByRole("button", { name: /Run my Pre-Flight Check/i }).click();
 
-  const text = await waitForFiveSections(page);
-  expectAllFiveSectionsInOrder(text);
+  const text = await waitForAllSections(page);
+  expectAllSectionsInOrder(text);
 
   // The 1% rule on a $10k account at a 2% stop yields $5,000 notional / $500 margin at 10x.
   // Match common formatting variants: $5,000, $5000, 5,000 USD.
@@ -65,8 +65,8 @@ test("Test 2: ETH long 25x no stop, $5k account", async ({ page }) => {
 
   await page.getByRole("button", { name: /Run my Pre-Flight Check/i }).click();
 
-  const text = await waitForFiveSections(page);
-  expectAllFiveSectionsInOrder(text);
+  const text = await waitForAllSections(page);
+  expectAllSectionsInOrder(text);
 
   // The system prompt forces the model to call out a missing stop as a failure mode and
   // calculate sizing with an assumed 2% stop. Look for specific "no stop" / "without a stop"
@@ -116,8 +116,8 @@ test("Test 3: SOL short 5x with 3% stop and TradingView screenshot, $20k account
 
   await page.getByRole("button", { name: /Run my Pre-Flight Check/i }).click();
 
-  const text = await waitForFiveSections(page, 90_000);
-  expectAllFiveSectionsInOrder(text);
+  const text = await waitForAllSections(page, 90_000);
+  expectAllSectionsInOrder(text);
 
   // Chart context should manifest in the text — vision model should describe a chart
   // We test for at least one chart-derived term, with a wide allowlist to avoid flakiness
@@ -173,4 +173,68 @@ test("API: rejects long with stop above entry", async ({ request }) => {
     }
   });
   expect(res.status()).toBe(400);
+});
+
+test("API: risk-budget mode without riskPct returns 400", async ({ request }) => {
+  const res = await request.post("/api/risk-check", {
+    data: {
+      coin: "BTC",
+      direction: "long",
+      leverage: 10,
+      entry: 70_000,
+      accountSize: 10_000,
+      mode: "risk-budget"
+    }
+  });
+  expect(res.status()).toBe(400);
+  const body = (await res.json()) as { error?: string };
+  expect(body.error).toMatch(/riskPct is required/i);
+});
+
+test("Test 4: risk-budget mode derives a stop and sizes from it", async ({ page }) => {
+  await page.goto("/");
+
+  await fillCommonFields(page, {
+    coin: "BTC",
+    direction: "long",
+    leverage: 5, // low enough to keep derived stop sane
+    accountSize: 10_000
+  });
+
+  // Switch to risk-budget mode
+  await page.getByTestId("mode-risk-budget").click();
+  await expect(page.getByTestId("derived-stop")).toBeVisible();
+
+  // Default risk is 1%. 1% / 5x = 0.2% — derived stop should be visible
+  const derivedText = await page.getByTestId("derived-stop").textContent();
+  expect(derivedText, "derived stop should display a price").toMatch(/\$/);
+  expect(derivedText, "derived stop should display the distance %").toMatch(/0\.2/);
+
+  await page.getByRole("button", { name: /Run my Pre-Flight Check/i }).click();
+
+  const text = await waitForAllSections(page);
+  expectAllSectionsInOrder(text);
+
+  const lower = text.toLowerCase();
+  // Report should explicitly call out that the trade is in derived/risk-budget mode
+  // OR call out the tightness of the derived stop.
+  const acknowledged =
+    lower.includes("derived") ||
+    lower.includes("risk-budget") ||
+    lower.includes("risk budget") ||
+    lower.includes("0.2%") ||
+    lower.includes("microstructure") ||
+    lower.includes("too tight") ||
+    lower.includes("tight") ||
+    lower.includes("wicked");
+  expect(
+    acknowledged,
+    `expected report to acknowledge the derived stop or its tightness.\n${text.slice(0, 1500)}`
+  ).toBe(true);
+
+  // TRADE PLAN section is required and must include TP1/2/3
+  expect(text).toMatch(/TRADE PLAN/i);
+  expect(text).toMatch(/TP1/i);
+  expect(text).toMatch(/TP2/i);
+  expect(text).toMatch(/TP3/i);
 });

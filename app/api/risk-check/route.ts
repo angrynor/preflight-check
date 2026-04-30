@@ -58,7 +58,9 @@ export async function POST(req: NextRequest): Promise<Response> {
     leverage: request.leverage,
     direction: request.direction,
     stop: request.stop,
-    accountSize: request.accountSize
+    accountSize: request.accountSize,
+    riskPct: request.riskPct,
+    mode: request.mode
   });
 
   let chartContext: string | null = null;
@@ -67,7 +69,8 @@ export async function POST(req: NextRequest): Promise<Response> {
       const mediaType = detectImageMediaType(request.screenshotBase64.slice(0, 30));
       chartContext = await describeChart({
         base64: request.screenshotBase64,
-        mediaType
+        mediaType,
+        timeframe: request.chartTimeframe ?? "auto"
       });
     } catch (err) {
       console.warn(

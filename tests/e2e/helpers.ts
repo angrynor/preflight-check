@@ -5,6 +5,7 @@ const SECTION_HEADINGS = [
   "THE BEAR CASE",
   "THREE WARNING FLAGS",
   "PROPER POSITION SIZING",
+  "TRADE PLAN",
   "THREE EXIT TRIGGERS"
 ] as const;
 
@@ -132,7 +133,7 @@ export async function generateCandlestickChart(page: Page): Promise<Buffer> {
   return page.locator("#c").screenshot();
 }
 
-export async function waitForFiveSections(page: Page, timeoutMs: number = 75_000): Promise<string> {
+export async function waitForAllSections(page: Page, timeoutMs: number = 90_000): Promise<string> {
   const report = page.getByTestId("risk-report");
   await expect(report).toBeVisible({ timeout: 15_000 });
   const deadline = Date.now() + timeoutMs;
@@ -154,7 +155,7 @@ export async function waitForFiveSections(page: Page, timeoutMs: number = 75_000
   );
 }
 
-export function expectAllFiveSectionsInOrder(text: string): void {
+export function expectAllSectionsInOrder(text: string): void {
   const upper = text.toUpperCase();
   let cursor = 0;
   for (const heading of SECTION_HEADINGS) {

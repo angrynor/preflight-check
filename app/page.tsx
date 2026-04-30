@@ -24,8 +24,14 @@ export default function Home() {
           direction: values.direction,
           leverage: values.leverage,
           entry: Number(values.entry),
-          stop: values.stop === "" ? null : Number(values.stop),
+          stop:
+            values.mode === "risk-budget" || values.stop === ""
+              ? null
+              : Number(values.stop),
           accountSize: Number(values.accountSize),
+          riskPct: values.riskPct,
+          mode: values.mode,
+          chartTimeframe: values.chartTimeframe,
           screenshotBase64: values.screenshotBase64 ?? undefined
         })
       });

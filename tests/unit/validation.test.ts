@@ -123,3 +123,56 @@ describe("stripDataUrl", () => {
     expect(stripDataUrl("iVBORw")).toBe("iVBORw");
   });
 });
+
+describe("validateRiskCheckRequest — risk-budget mode", () => {
+  it("accepts mode=risk-budget with riskPct, ignores explicit stop", () => {
+    const r = validateRiskCheckRequest({
+      ...validBody,
+      mode: "risk-budget",
+      riskPct: 2,
+      stop: 50000 // should be ignored
+    });
+    expect(r.ok).toBe(true);
+    expect(r.data?.mode).toBe("risk-budget");
+    expect(r.data?.riskPct).toBe(2);
+    expect(r.data?.stop).toBeNull();
+  });
+
+  it("rejects mode=risk-budget without riskPct", () => {
+    const r = validateRiskCheckRequest({ ...validBody, mode: "risk-budget" });
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/riskPct is required/);
+  });
+
+  it("rejects riskPct above 5", () => {
+    const r = validateRiskCheckRequest({ ...validBody, mode: "risk-budget", riskPct: 10 });
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/0\.1 and 5/);
+  });
+
+  it("rejects riskPct below 0.1", () => {
+    const r = validateRiskCheckRequest({ ...validBody, mode: "risk-budget", riskPct: 0.05 });
+    expect(r.ok).toBe(false);
+  });
+
+  it("defaults mode to stop-defined when omitted", () => {
+    const r = validateRiskCheckRequest(validBody);
+    expect(r.ok).toBe(true);
+    expect(r.data?.mode).toBe("stop-defined");
+  });
+});
+
+describe("validateRiskCheckRequest — chartTimeframe", () => {
+  it("accepts known timeframes", () => {
+    for (const tf of ["1m", "5m", "15m", "30m", "1h", "4h", "1d", "auto"]) {
+      const r = validateRiskCheckRequest({ ...validBody, chartTimeframe: tf });
+      expect(r.ok, `tf=${tf}`).toBe(true);
+      expect(r.data?.chartTimeframe).toBe(tf);
+    }
+  });
+  it("ignores unknown timeframes silently", () => {
+    const r = validateRiskCheckRequest({ ...validBody, chartTimeframe: "8h" });
+    expect(r.ok).toBe(true);
+    expect(r.data?.chartTimeframe).toBeUndefined();
+  });
+});

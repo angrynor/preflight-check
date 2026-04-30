@@ -1,4 +1,6 @@
 export type Direction = "long" | "short";
+export type SizingMode = "stop-defined" | "risk-budget";
+export type ChartTimeframe = "1m" | "5m" | "15m" | "30m" | "1h" | "4h" | "1d" | "auto";
 
 export interface RiskCheckRequest {
   coin: string;
@@ -7,6 +9,9 @@ export interface RiskCheckRequest {
   entry: number;
   stop: number | null;
   accountSize: number;
+  riskPct?: number;
+  mode?: SizingMode;
+  chartTimeframe?: ChartTimeframe;
   screenshotBase64?: string;
 }
 
@@ -58,9 +63,16 @@ export interface DerivedValues {
   stopDistancePct: number | null;
   notional: number;
   margin: number;
-  oneRiskUsd: number;
-  properNotionalAt1R: number;
-  properMarginAt1R: number;
+  riskBudgetPct: number;
+  riskBudgetUsd: number;
+  properNotional: number;
+  properMargin: number;
   effectiveStopPct: number;
   assumedStopUsed: boolean;
+  /** When mode === "risk-budget", the stop derived from risk%/leverage. Null in stop-defined mode. */
+  derivedStopPrice: number | null;
+  derivedStopDistancePct: number | null;
+  /** True when the derived stop is impractically tight for typical asset volatility (<0.5%). */
+  derivedStopTooTight: boolean;
+  mode: SizingMode;
 }

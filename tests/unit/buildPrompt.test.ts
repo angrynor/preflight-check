@@ -9,7 +9,9 @@ const request: ValidatedRequest = {
   leverage: 10,
   entry: 67000,
   stop: 65660,
-  accountSize: 10000
+  accountSize: 10000,
+  mode: "stop-defined",
+  riskPct: 1
 };
 
 const derived: DerivedValues = {
@@ -18,11 +20,16 @@ const derived: DerivedValues = {
   stopDistancePct: 2,
   notional: 100_000,
   margin: 10_000,
-  oneRiskUsd: 100,
-  properNotionalAt1R: 5_000,
-  properMarginAt1R: 500,
+  riskBudgetPct: 1,
+  riskBudgetUsd: 100,
+  properNotional: 5_000,
+  properMargin: 500,
   effectiveStopPct: 2,
-  assumedStopUsed: false
+  assumedStopUsed: false,
+  derivedStopPrice: null,
+  derivedStopDistancePct: null,
+  derivedStopTooTight: false,
+  mode: "stop-defined"
 };
 
 const snapshot: MarketSnapshot = {
@@ -56,6 +63,41 @@ describe("buildRiskOfficerPrompt", () => {
       chartContext: null
     });
     expect(prompt).toMatch(/STOP LOSS: NONE/);
+  });
+
+  it("renders DERIVED stop description when in risk-budget mode", () => {
+    const prompt = buildRiskOfficerPrompt({
+      request: { ...request, stop: null, mode: "risk-budget", riskPct: 2 },
+      derived: {
+        ...derived,
+        stopDistancePct: 0.2,
+        derivedStopPrice: 66866,
+        derivedStopDistancePct: 0.2,
+        derivedStopTooTight: true,
+        mode: "risk-budget"
+      },
+      snapshot,
+      chartContext: null
+    });
+    expect(prompt).toMatch(/DERIVED from/);
+    expect(prompt).toMatch(/TIGHTNESS WARNING/);
+    expect(prompt).toContain("RISK-BUDGET (stop derived");
+  });
+
+  it("describes trader-set stops as TRADER-SET", () => {
+    const prompt = buildRiskOfficerPrompt({ request, derived, snapshot, chartContext: null });
+    expect(prompt).toMatch(/TRADER-SET/);
+    expect(prompt).toContain("STOP-DEFINED (trader provided");
+  });
+
+  it("renders chart timeframe in vision context line", () => {
+    const prompt = buildRiskOfficerPrompt({
+      request: { ...request, chartTimeframe: "4h" },
+      derived,
+      snapshot,
+      chartContext: "TIMEFRAME: 4H\nTREND: uptrend"
+    });
+    expect(prompt).toContain("timeframe: 4h");
   });
 
   it("renders chart context when provided", () => {

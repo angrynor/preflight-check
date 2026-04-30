@@ -8,12 +8,16 @@ LEVERAGE: {{leverage}}x
 ENTRY PRICE: {{entry}} USD
 STOP LOSS: {{stop_or_none}}
 ACCOUNT SIZE: {{accountSize}} USD
+RISK BUDGET: {{risk_budget_pct}}% of account ({{risk_budget_usd}} max loss accepted by trader)
+SIZING MODE: {{sizing_mode}}
 
 Computed values:
 - Liquidation price: {{liquidation_price}} USD
 - Distance from entry to liquidation: {{liq_distance_pct}}%
 - Distance from entry to stop (if set): {{stop_distance_pct}}
 - Notional position value at stated leverage: {{notional}} USD
+- Proper notional at trader's risk budget: {{proper_notional}} USD ({{proper_margin}} margin)
+{{derived_stop_block}}
 
 Current market context (live data, fetched seconds ago):
 - Mark price: {{mark_price}} USD
@@ -23,13 +27,13 @@ Current market context (live data, fetched seconds ago):
 - BTC dominance: {{btc_dominance}}%
 - Recent price action (14-day summary): {{price_summary}}
 
-Chart context from user's TradingView screenshot, if provided:
+Chart context from user's TradingView screenshot (timeframe: {{chart_timeframe}}), if provided:
 {{chart_context_or_none}}
 
-Return EXACTLY five sections, in this order, no preamble, no closing fluff:
+Return EXACTLY six sections, in this order, no preamble, no closing fluff:
 
 1. THE BULL CASE
-The strongest 2-line argument FOR this trade given current market structure. Be honest, not cheerleading.
+The strongest 2-line argument FOR this trade given current market structure. Be honest, not cheerleading. If there is no real bull case given the data, say so directly.
 
 2. THE BEAR CASE
 The strongest 2-line argument AGAINST this trade given current market structure. Cite specific numbers and contradictions.
@@ -38,10 +42,19 @@ The strongest 2-line argument AGAINST this trade given current market structure.
 Three specific structural risks in the current market that contradict this trade. Cite levels, funding, OI, BTC.D, or chart structure. Be specific. 3 lines, one flag per line.
 
 4. PROPER POSITION SIZING
-Calculate the position size that respects a 1% per-trade risk rule on the stated account. Show the math: max loss allowed (1% of account), entry-to-stop distance, resulting position size in USD notional, resulting margin at the stated leverage. Compare to what the user is implicitly proposing if their leverage and account suggest they were going to size much bigger. Be a bouncer, not a cheerleader. If the trader has no stop set, calculate proper size assuming a 2% stop, and explicitly call out that operating without a stop is itself the failure mode.
+Calculate the position size that respects the trader's stated {{risk_budget_pct}}% per-trade risk rule on the stated account. Show the math: max loss allowed ({{risk_budget_usd}}), entry-to-stop distance, resulting position size in USD notional, resulting margin at the stated leverage. Compare to what the user is implicitly proposing if their leverage and account suggest they were going to size much bigger. Be a bouncer, not a cheerleader. If the trader has no stop set AND no derived stop, calculate proper size assuming a 2% stop, and explicitly call out that operating without a stop is itself the failure mode. If the trader's risk budget is above 2%, explicitly note that this exceeds standard risk management and explain the implications (drawdown impact, recovery math). If the derived stop is impractically tight (under 0.5% for a major asset), call it a market-microstructure stop, not a real stop, and recommend lower leverage.
 
-5. THREE EXIT TRIGGERS
-Three specific events or levels that should make the trader close the position immediately. Be concrete: "funding flips above X%", "ETH/BTC closes below X", "any close below X on volume." No vague feelings, no "if it feels wrong." 3 lines.
+5. TRADE PLAN
+Specify a concrete trade plan as bullet lines, one per line, in this exact format:
+- ENTRY: $<price> (<status — at market / wait for pullback / scale-in zone>)
+- STOP: $<price> (<distance%> away — <basis: chart structure / risk-budget derived / user-set>)
+- TP1: $<price> (<distance%> from entry, R:R <multiple>:1) — take 33% of position, move stop to break-even
+- TP2: $<price> (<distance%> from entry, R:R <multiple>:1) — take 33% of remaining
+- TP3: $<price> (<distance%> from entry, R:R <multiple>:1) — let the rest run, trail with structure
+If a chart was provided, derive TPs from visible structure (next resistance for longs, next support for shorts). If no chart, derive TPs from mathematical R:R targets (1R, 2R, 3R from the stop). Always show R:R math. End the section with: "Not financial advice. This is a structural framework, not a signal."
+
+6. THREE EXIT TRIGGERS
+Three specific events or levels — beyond the stop — that should make the trader close the position immediately. Be concrete: "funding flips above X%", "ETH/BTC closes below X", "any close below X on volume." No vague feelings, no "if it feels wrong." 3 lines.
 
 Rules:
 - Cite numbers, not vibes.
@@ -50,14 +63,18 @@ Rules:
 - If the trade is genuinely well-structured, say so honestly. Don't manufacture problems. But never let oversized leverage or no-stop go unflagged.
 - Use markdown. Use ## for section headings.`;
 
-export const CHART_VISION_PROMPT = `Analyze this TradingView chart screenshot of a crypto asset. Extract and return ONLY the following, in this exact format, max 6 lines total:
+export const CHART_VISION_PROMPT = `Analyze this TradingView chart screenshot of a crypto asset. The trader has selected timeframe context: {{chart_timeframe}}. Extract and return ONLY the following, in this exact format, max 10 lines total:
 
-TIMEFRAME: [the visible chart timeframe, e.g. "4H", "1D"]
+TIMEFRAME: [the visible chart timeframe, e.g. "4H", "1D" — if it differs from selected, note both]
 TREND: [uptrend / downtrend / range / breakout / breakdown, with brief reason]
 KEY LEVELS: [up to 3 visible support/resistance levels, with prices]
 RECENT ACTION: [1 line description of last 5-10 candles]
 INDICATORS: [any visible indicators and their state, e.g. "RSI 68 near overbought", "MACD bearish cross"]
 DIVERGENCES: [any visible divergences, or "none visible"]
+SUGGESTED_STOP: [a single price just beyond the nearest invalidation level for the trade direction; format as "long: $X" or "short: $X". Only if a clear structural level is visible, otherwise "no clear structural stop"]
+TP1: [first take-profit price at next minor structural level, or "n/a"]
+TP2: [second take-profit price at next major structural level, or "n/a"]
+TP3: [third take-profit price at the next major HTF level, or "n/a"]
 
 Be concise. Do not add commentary or trading advice. Only describe what is visible on the chart.`;
 
@@ -68,16 +85,23 @@ export interface PromptVariables {
   entry: number;
   stop_or_none: string;
   accountSize: number;
+  risk_budget_pct: string;
+  risk_budget_usd: string;
+  sizing_mode: string;
   liquidation_price: string;
   liq_distance_pct: string;
   stop_distance_pct: string;
   notional: string;
+  proper_notional: string;
+  proper_margin: string;
+  derived_stop_block: string;
   mark_price: string;
   funding_rate: string;
   oi_current: string;
   oi_7d_change: string;
   btc_dominance: string;
   price_summary: string;
+  chart_timeframe: string;
   chart_context_or_none: string;
 }
 
@@ -88,16 +112,23 @@ const REQUIRED_KEYS: (keyof PromptVariables)[] = [
   "entry",
   "stop_or_none",
   "accountSize",
+  "risk_budget_pct",
+  "risk_budget_usd",
+  "sizing_mode",
   "liquidation_price",
   "liq_distance_pct",
   "stop_distance_pct",
   "notional",
+  "proper_notional",
+  "proper_margin",
+  "derived_stop_block",
   "mark_price",
   "funding_rate",
   "oi_current",
   "oi_7d_change",
   "btc_dominance",
   "price_summary",
+  "chart_timeframe",
   "chart_context_or_none"
 ];
 
@@ -105,7 +136,11 @@ export function renderRiskOfficerPrompt(vars: PromptVariables): string {
   let out = RISK_OFFICER_SYSTEM_PROMPT;
   for (const key of REQUIRED_KEYS) {
     const raw = vars[key];
-    if (raw === undefined || raw === null || (typeof raw === "string" && raw.length === 0)) {
+    if (raw === undefined || raw === null) {
+      throw new Error(`Unfilled prompt variable: ${key}`);
+    }
+    // Allow empty string only for derived_stop_block (used when no stop derivation).
+    if (typeof raw === "string" && raw.length === 0 && key !== "derived_stop_block") {
       throw new Error(`Unfilled prompt variable: ${key}`);
     }
     const placeholder = `{{${key}}}`;
@@ -118,10 +153,15 @@ export function renderRiskOfficerPrompt(vars: PromptVariables): string {
   return out;
 }
 
+export function renderChartVisionPrompt(timeframe: string): string {
+  return CHART_VISION_PROMPT.split("{{chart_timeframe}}").join(timeframe);
+}
+
 export const REQUIRED_REPORT_SECTIONS = [
   "THE BULL CASE",
   "THE BEAR CASE",
   "THREE WARNING FLAGS",
   "PROPER POSITION SIZING",
+  "TRADE PLAN",
   "THREE EXIT TRIGGERS"
 ] as const;

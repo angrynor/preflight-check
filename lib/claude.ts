@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { CHART_VISION_PROMPT } from "./prompts";
+import { renderChartVisionPrompt } from "./prompts";
 
 const VISION_MODEL = "claude-sonnet-4-6";
 const REPORT_MODEL = "claude-sonnet-4-6";
@@ -22,6 +22,7 @@ export function getClient(): Anthropic {
 export interface VisionInput {
   base64: string;
   mediaType: "image/png" | "image/jpeg" | "image/webp" | "image/gif";
+  timeframe?: string;
 }
 
 function isRetryable(err: unknown): boolean {
@@ -45,11 +46,12 @@ async function withRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {
 
 export async function describeChart(image: VisionInput): Promise<string> {
   const client = getClient();
+  const visionPrompt = renderChartVisionPrompt(image.timeframe ?? "auto");
   const res = await withRetry("describeChart", () =>
     client.messages.create({
       model: VISION_MODEL,
       max_tokens: MAX_VISION_TOKENS,
-      system: CHART_VISION_PROMPT,
+      system: visionPrompt,
       messages: [
         {
           role: "user",

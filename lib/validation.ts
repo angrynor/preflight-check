@@ -1,5 +1,7 @@
 import { isSupportedCoin, type CoinSymbol } from "./coins";
-import type { Direction, RiskCheckRequest } from "./types";
+import type { ChartTimeframe, Direction, RiskCheckRequest, SizingMode } from "./types";
+
+const VALID_TIMEFRAMES: ChartTimeframe[] = ["1m", "5m", "15m", "30m", "1h", "4h", "1d", "auto"];
 
 const MAX_SCREENSHOT_BYTES = 5 * 1024 * 1024;
 const MAX_SCREENSHOT_BASE64_LEN = Math.ceil((MAX_SCREENSHOT_BYTES * 4) / 3);
@@ -40,6 +42,20 @@ export function validateRiskCheckRequest(raw: unknown): ValidationResult {
     return { ok: false, error: `entry must be a positive number.` };
   }
 
+  let mode: SizingMode = "stop-defined";
+  if (r.mode === "risk-budget" || r.mode === "stop-defined") {
+    mode = r.mode;
+  }
+
+  let riskPct: number | undefined;
+  if (r.riskPct !== null && r.riskPct !== undefined && r.riskPct !== "") {
+    const parsed = toFiniteNumber(r.riskPct);
+    if (parsed === null || parsed < 0.1 || parsed > 5) {
+      return { ok: false, error: `riskPct must be between 0.1 and 5.` };
+    }
+    riskPct = parsed;
+  }
+
   let stop: number | null = null;
   if (r.stop !== null && r.stop !== undefined && r.stop !== "") {
     const parsedStop = toFiniteNumber(r.stop);
@@ -55,9 +71,25 @@ export function validateRiskCheckRequest(raw: unknown): ValidationResult {
     stop = parsedStop;
   }
 
+  // In risk-budget mode, an explicit stop is ignored (we'll derive one).
+  if (mode === "risk-budget") {
+    stop = null;
+    if (riskPct === undefined) {
+      return {
+        ok: false,
+        error: `riskPct is required when mode is "risk-budget".`
+      };
+    }
+  }
+
   const accountSize = toFiniteNumber(r.accountSize);
   if (accountSize === null || accountSize <= 0) {
     return { ok: false, error: `accountSize must be a positive number.` };
+  }
+
+  let chartTimeframe: ChartTimeframe | undefined;
+  if (typeof r.chartTimeframe === "string" && VALID_TIMEFRAMES.includes(r.chartTimeframe as ChartTimeframe)) {
+    chartTimeframe = r.chartTimeframe as ChartTimeframe;
   }
 
   let screenshotBase64: string | undefined;
@@ -78,6 +110,9 @@ export function validateRiskCheckRequest(raw: unknown): ValidationResult {
       entry,
       stop,
       accountSize,
+      riskPct,
+      mode,
+      chartTimeframe,
       screenshotBase64
     }
   };
