@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { Footer } from "@/components/Footer";
 import { RiskReport } from "@/components/RiskReport";
@@ -73,13 +74,22 @@ export default function Home() {
 
   return (
     <main className="mx-auto max-w-[720px] px-4 sm:px-6 pt-10 sm:pt-14 pb-6">
-      <header className="mb-8">
-        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
-          Pre-Flight Check
-        </h1>
-        <p className="mt-2 text-sm text-muted">
-          Pre-trade risk check for crypto perp traders.
-        </p>
+      <header className="mb-8 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
+            Pre-Flight Check
+          </h1>
+          <p className="mt-2 text-sm text-muted">
+            Pre-trade risk check for crypto perp traders.
+          </p>
+        </div>
+        <Link
+          href="/lab"
+          className="text-xs uppercase tracking-wider text-accent hover:underline whitespace-nowrap pt-2"
+          data-testid="lab-link"
+        >
+          Strategy Lab →
+        </Link>
       </header>
 
       <TradeForm onSubmit={handleSubmit} busy={streaming} />

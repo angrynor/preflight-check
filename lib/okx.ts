@@ -122,6 +122,62 @@ export async function getDailyKlinesOkx(coin: CoinSymbol, limit: number = 14): P
   });
 }
 
+/**
+ * Fetch up to ~1500 historical candles by paginating OKX's market/candles + history-candles.
+ * Returns oldest-first. Used for backtesting (typical use: 730 daily candles for 2 years).
+ *
+ * `bar` accepts OKX bar codes: "1m","3m","5m","15m","30m","1H","2H","4H","1D","1W"
+ */
+export async function getHistoricalKlinesOkx(
+  coin: CoinSymbol,
+  bar: string = "1D",
+  totalLimit: number = 730
+): Promise<DailyKline[]> {
+  const inst = okxSwapInst(coin);
+  const cacheKey = `okx:hist:${inst}:${bar}:${totalLimit}`;
+  return cached(
+    cacheKey,
+    async () => {
+      const PAGE_SIZE = 300;
+      const collected: OkxCandle[] = [];
+      // First page: most recent data.
+      const firstEnv = await fetchJson<OkxEnvelope<OkxCandle[]>>(
+        `${BASE_URL}/api/v5/market/candles?instId=${inst}&bar=${bar}&limit=${PAGE_SIZE}`
+      );
+      const first = unwrap(firstEnv, "market/candles");
+      collected.push(...first);
+
+      // Subsequent pages from the older history endpoint.
+      while (collected.length < totalLimit) {
+        const oldestTs = collected[collected.length - 1][0];
+        const remaining = totalLimit - collected.length;
+        const pageSize = Math.min(PAGE_SIZE, remaining);
+        const env = await fetchJson<OkxEnvelope<OkxCandle[]>>(
+          `${BASE_URL}/api/v5/market/history-candles?instId=${inst}&bar=${bar}&after=${oldestTs}&limit=${pageSize}`
+        );
+        const page = unwrap(env, "market/history-candles");
+        if (page.length === 0) break; // no more history
+        collected.push(...page);
+      }
+
+      // Reverse to oldest-first.
+      return collected
+        .slice()
+        .reverse()
+        .map((row) => ({
+          openTime: Number(row[0]),
+          open: parseNum(row[1]),
+          high: parseNum(row[2]),
+          low: parseNum(row[3]),
+          close: parseNum(row[4]),
+          volume: parseNum(row[5])
+        }));
+    },
+    // 30-minute cache for historical data (it doesn't move much).
+    30 * 60 * 1000
+  );
+}
+
 function parseNum(raw: string): number {
   const n = Number(raw);
   if (!Number.isFinite(n)) {
