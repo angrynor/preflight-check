@@ -136,3 +136,41 @@ ALL GREEN. Build complete.
 5. To watch the e2e suite drive a real browser (you mentioned wanting this in
    future sessions): `npx playwright test --headed` against either local dev or
    the deployed URL via E2E_BASE_URL.
+
+## 2026-04-30 19:14 UTC — BUILD
+**Pass 2 features shipped: risk-budget mode + chart-derived TRADE PLAN.**
+
+Two product expansions per Gavin's request, after he asked for an institutional-trader brutal assessment of the v1 product:
+
+**Risk-budget sizing mode (inverse of stop-defined).**
+- New form toggle: "I'll set my stop" vs "Calculate stop from risk %"
+- Risk % slider always visible (default 1%, range 0.25-5%, step 0.25%) with live-updating $-USD display
+- In risk-budget mode the stop input is replaced with a read-only computed value showing `$<price> / <distance>% away`
+- Math: stop_distance% = riskPct / leverage, assuming user deploys full account as margin (worst-case sizing)
+- UI flags derived stops <0.5% with a red warning ("you'll get wicked")
+- Server validates: if mode=risk-budget then riskPct is required (rejects 400 otherwise)
+
+**6-section report with TRADE PLAN.**
+- New section #5 (between PROPER POSITION SIZING and THREE EXIT TRIGGERS)
+- Format enforced via prompt: ENTRY / STOP / TP1 / TP2 / TP3 with explicit R:R math, scale-out rules (33% / 33% / 34%), break-even shift trigger at TP1
+- Vision prompt extended to also extract SUGGESTED_STOP, TP1, TP2, TP3 from chart structure
+- Section ends with "Not financial advice. This is a structural framework, not a signal."
+- Renders in the UI with cyan accent on the heading (section-plan CSS variant)
+
+**Chart timeframe selector.**
+- Dropdown appears only when a screenshot is uploaded (1m / 5m / 15m / 30m / 1h / 4h / 1d / auto)
+- Passed to vision prompt as context for chart interpretation
+
+**Risk officer behavior:**
+When derived stop is microstructure-tight (e.g. 0.2% for BTC), the model now overrides the trader's bad inputs in TRADE PLAN — instead of meekly producing a plan around the bad stop, it suggests a structurally valid entry/stop/TP ladder and recomputes sizing. Verified live: a 1% risk + 5x lev on BTC produces a 0.2% derived stop, the model correctly calls it "a microstructure artifact, not a level," and TRADE PLAN suggests $74,235 structural stop with $5,988 notional / $1,198 margin instead.
+
+## 2026-04-30 19:18 UTC — TEST
+After Pass 2: **119/119 unit tests** (+24 new across calculations, validation, prompts, buildPrompt) and **8/8 e2e tests** (+2 new) passing locally and against the deployed URL.
+
+E2e additions:
+- Test 4: switches to risk-budget mode in UI, verifies live-computed stop displays, submits, asserts TRADE PLAN section + TP1/2/3 lines + risk-budget acknowledgment in report
+- API test: rejects mode=risk-budget without riskPct (400 + specific error message)
+
+## 2026-04-30 19:20 UTC — DEPLOY
+Re-deployed: https://preflight-check.vercel.app (alias auto-updated)
+Production smoke test: stop-defined mode produces clean 6-section report with TP1/TP2/TP3 at 1R/2R/3R, model self-corrected its initial R:R miscalculation mid-stream. Risk-budget mode produces the prop-trader-coaching-junior-trader output Gavin asked for.
