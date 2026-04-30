@@ -174,3 +174,52 @@ E2e additions:
 ## 2026-04-30 19:20 UTC — DEPLOY
 Re-deployed: https://preflight-check.vercel.app (alias auto-updated)
 Production smoke test: stop-defined mode produces clean 6-section report with TP1/TP2/TP3 at 1R/2R/3R, model self-corrected its initial R:R miscalculation mid-stream. Risk-budget mode produces the prop-trader-coaching-junior-trader output Gavin asked for.
+
+## 2026-04-30 19:50 UTC — BUILD
+**Pass 3 shipped: Strategy Lab — honest backtester at /lab.**
+
+After Gavin asked for a strategy/backtesting feature with student-buildable custom strategies, I pushed back with the institutional-trader truth: "proven" retail strategies mostly don't work after fees, and a clean backtester will demonstrate that. Gavin chose Option A (build the honest version even when it tells students their favorite strategy loses money). This pass delivers it.
+
+Architecture:
+
+**lib/indicators.ts** — 16 unit tests. Pure functions for SMA, EMA, RSI (Wilder), Bollinger Bands, MACD (with proper signal-line EMA seeding), ATR, Donchian channels, plus crossedAbove/crossedBelow helpers. All return `(number | null)[]` arrays of input length, with nulls during warmup.
+
+**lib/backtest.ts** — 9 unit tests. Event-loop engine over a candle series. Signals at index `i` enter at candle close (with slippage applied against the trader). Stops/TPs check high/low; conservative — stop wins if both could trigger in the same bar. Reverse-side signals close-then-open. Force-closes any open position at end of series. Per-bar funding cost as optional drag. Equity curve mark-to-market on every candle.
+
+**lib/metrics.ts** — 8 unit tests. Win rate, profit factor (sumWin / |sumLoss|), expectancy, per-trade Sharpe, daily-annualized Sharpe, max drawdown (peak-to-trough), CAGR, growth factor, average bars held. NaN/Infinity sanitized to JSON-safe before return. Verdict line is the centerpiece: "This strategy lost money. This is not an edge." / "Marginal..." / "Edge present...". Verdict severity drives UI color.
+
+**lib/strategies.ts** — 13 unit tests. 6 well-known strategies + a custom DSL:
+- Golden Cross / Death Cross (EMA 50/200), default long-only
+- RSI Mean Reversion (14, 30/70), allow-shorts toggle
+- Bollinger Bands Reversion (20, 2σ)
+- Donchian Channel Breakout (20-day in, 10-day out) — Turtle-style, defaults shorts on
+- MACD Crossover (12/26/9)
+- Buy and Hold — the honest benchmark every other strategy must beat
+- Custom — user-defined entry+exit via 8-condition DSL (RSI <>, EMA cross, MACD cross, BB touch)
+
+Donchian breakout fix: original implementation included current bar in its own lookback (would never trigger on monotonic data because `close ≤ high`). Fixed to compare today's close against YESTERDAY's lookback — matches Turtle Trader semantics.
+
+**lib/okx.ts** — Added `getHistoricalKlinesOkx` that paginates `/market/candles` (300/page) + `/market/history-candles` to fetch up to 1500 bars. 30-minute TTL cache. Used by both backtest and live-signal endpoints.
+
+**API routes:**
+- `POST /api/backtest` — accepts coin, strategyId, params, candleCount, bar, costPerSide, slippagePerSide, fundingCostPerBar; returns metrics + trades + equity curve + buy-and-hold benchmark
+- `POST /api/strategy-signal` — returns whether the chosen strategy fires on the most recent CLOSED candle, plus most-recent-signal-ever context
+
+**UI (/lab page):**
+- StrategyLab.tsx (~600 LOC, single component): coin/strategy/window/bar pickers, params overrides, custom-strategy form (8 condition types, side toggle), Run Backtest + Live Signal Now buttons, verdict box (color by severity), metrics grid, equity chart, trades table
+- EquityChart.tsx: hand-rolled SVG line chart with strategy + buy-and-hold overlay, no external chart library
+- Nav link from main page → /lab and back
+
+**Smoke tests on real OKX data (BTC, daily):**
+- Donchian Breakout, 730d: 30 trades, 23.3% win rate, **-46.2% return vs +33.4% buy-and-hold**. Verdict: "This strategy lost money. Profit factor 0.63 — losers eat the winners. This is not an edge."
+- Donchian Breakout, 365d: 19 trades, 21% win rate, -37.5% vs -21.5% buy-and-hold. Same verdict (lost more than holding).
+- Golden Cross, 730d: **0 trades**. EMA50/EMA200 didn't cross in the window — strategy is too slow to fire on this data.
+- RSI Mean Reversion, 730d: 6 trades over 2 years, too few for a verdict.
+
+These are the kind of brutally honest results we promised. The lesson IS the product.
+
+## 2026-04-30 19:55 UTC — TEST
+After Pass 3: **165/165 unit tests** (+45: indicators 16, backtest 9, metrics 8, strategies 13) and **16/16 e2e tests** (+8 lab tests). All green locally and against the deployed URL https://preflight-check.vercel.app.
+
+## 2026-04-30 19:56 UTC — DEPLOY
+Production smoke test of /lab + /api/backtest + /api/strategy-signal — all green. Lab page 8.62 kB / 105 kB First Load JS. Backtest endpoint median latency ~3-5s for 730 daily candles (cold) / <1s (warm cache). Live signal ~1-2s.
